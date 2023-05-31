@@ -192,6 +192,10 @@ def Distribution(preferences_stud, preferences_spec, scores, distrib_stud, distr
                                     break
 
                                 elif scores.loc[entr][subj] < scores.loc[temp_arr_en[-1]][subj]:
+                                    
+                                    # если балл абитуриента entr меньше, чем у крайнего абитуриента в отсортированном листе ожидания
+                                    # за отдельно взятый экзамен, то его заявление переносится на следующую по приоритету специальность
+                                    preferences_stud.loc[entr]["Entrants"][1] += 1
 
                                     break
 
