@@ -85,7 +85,8 @@ def Distribution(preferences_stud, preferences_spec, scores, distrib_stud, distr
     for i in range(len(speciality_col)): 
         passing_score.append([] * len(speciality_col))
 
-    # выполняем пока не осталось непоступивших абитуриентов
+    # выполняем до тех пор, пока каждый студент не будет либо внесен в лист ожидания какой-либо специальности
+    # либо отвергнут всеми специальностями, которые были перечислены в списке его предпочтений
     while len(not_stud) != 0:
 
         for entr in range(len(preferences_stud["Entrants"])):
