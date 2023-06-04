@@ -24,12 +24,11 @@ def read_data_exel(filename):
 
     preferences_stud["Entrants"] = entr
 
-    distrib_stud = {}
-    distrib_scores = {}
-    arr_d = []
+    distrib_stud = []
+    distrib_scores = []
 
-    distrib_stud = {s: arr_d for s in range(len(speciality_col))}
-    distrib_scores = {s: arr_d for s in range(len(speciality_col))}
+    distrib_stud = [[] for s in range(len(speciality_col))]
+    distrib_scores = [[] for s in range(len(speciality_col))]
     
     preferences_spec = pd.read_excel(filename, sheet_name = "Preferences_Spec")
     scores = pd.read_excel(filename, sheet_name = "Scores")
@@ -72,10 +71,9 @@ def count_score(spec, entr, preferences_spec, speciality_col, scores):
 def Distribution(preferences_stud, preferences_spec, scores, distrib_stud, distrib_scores, speciality_col, quotas):
 
     # массив еще не зачисленных абитуриентов
-    not_stud = []
+    not_stud = deque()
     for i in range(len(preferences_stud["Entrants"])):
         not_stud.append(i)
-    not_stud
 
     # массив непоступивших абитуриентов
     rejected_entrants = []
@@ -89,126 +87,111 @@ def Distribution(preferences_stud, preferences_spec, scores, distrib_stud, distr
     # либо отвергнут всеми специальностями, которые были перечислены в списке его предпочтений
     while len(not_stud) != 0:
 
-        for entr in range(len(preferences_stud["Entrants"])):
+        entr = not_stud[0]
 
-            # проаеряем, является ли студен непоступившим
-            if entr in not_stud:
+        # если число стоящее рядом с Ф.И.О. абитуриента, начинает превышать количество специальностей,
+        # которые находятся в списке его приоритетов, абитуриент начинает считаться не поступившим ни на одну специальность
+        if preferences_stud.loc[entr]["Entrants"][1] > preferences_stud[speciality_col].loc[entr].max():
+            rejected_entrants.append(entr)
+            not_stud.popleft()
 
-                # если число стоящее рядом с Ф.И.О. абитуриента, начинает превышать количество специальностей,
-                # которые находятся в списке его приоритетов, абитуриент начинает считаться не поступившим ни на одну специальность
-                if preferences_stud.loc[entr]["Entrants"][1] > preferences_stud[speciality_col].loc[entr].max():
-                    rejected_entrants.append(entr)
-                    not_stud.remove(entr)
+        else:
+            # рейтинг абитуриента entr (ключи = специальность, значение = рейтинг)
+            priority = list(preferences_stud.loc[entr][speciality_col])
 
-                else:
-                    # рейтинг абитуриента entr (ключи = специальность, значение = рейтинг)
-                    priority = list(preferences_stud.loc[entr][speciality_col])
+            priority = {i: priority[i] for i in range(len(priority))}
 
-                    priority = {i: priority[i] for i in range(len(priority))}
+            priority = dict(sorted(priority.items(), key=lambda tup: tup[1]))
 
-                    priority = dict(sorted(priority.items(), key=lambda tup: tup[1]))
+            choice_number = preferences_stud.loc[entr]["Entrants"][1]
 
-                    choice_number = preferences_stud.loc[entr]["Entrants"][1]
+            for i in range(len(priority)):
+                if (priority[i] < choice_number):
+                    priority.pop(i)
 
-                    for i in range(len(priority)):
-                        if (priority[i] < choice_number):
-                            priority.pop(i)
+            for spec in priority.keys():
 
-                    for spec in priority.keys():
+                temp_score_entr_spec = count_score(spec, entr, preferences_spec, speciality_col, scores)
 
-                        temp_score_entr_spec = count_score(spec, entr, preferences_spec, speciality_col, scores)
+                # если квота не превышена, добавляем абитуриента entr в распределение
+                if len(distrib_stud[spec]) < quotas[spec]:
 
-                        temp_arr_en = distrib_stud[spec].copy()
-                        temp_arr_sc = distrib_scores[spec].copy()
-
-                        # если квота не превышена, добавляем абитуриента entr в распределение
-                        if len(temp_arr_en) < quotas[spec]:
-
-                            temp_arr_en.append(entr)
-                            temp_arr_sc.append(temp_score_entr_spec)
+                    distrib_stud[spec].append(entr)
+                    distrib_scores[spec].append(temp_score_entr_spec)
                             
-                            temp_arr_sc, temp_arr_en = my_sort(temp_arr_sc, temp_arr_en, True, 0)
+                    distrib_scores[spec], distrib_stud[spec] = my_sort(distrib_scores[spec], distrib_stud[spec], True, 0)
 
-                            not_stud.remove(entr)
+                    not_stud.popleft()
                             
-                            passing_score[spec] = temp_arr_sc[-1]
+                    passing_score[spec] = distrib_scores[spec][-1]
 
-                            distrib_stud[spec] = temp_arr_en
-                            distrib_scores[spec] = temp_arr_sc
-
-                            break
+                    break
                         
-                        # если квота превышена, но у абитуриента entr сумма баллов больше, чем у крайнего абитуриента в отсортированном листе ожидания,
-                        # удаляем из листа ожидания крайнего абитуриента, и добавляем в него абитуриента entr
-                        elif temp_score_entr_spec > temp_arr_sc[-1]:
+                # если квота превышена, но у абитуриента entr сумма баллов больше, чем у крайнего абитуриента в отсортированном листе ожидания,
+                # удаляем из листа ожидания крайнего абитуриента, и добавляем в него абитуриента entr
+                elif temp_score_entr_spec > distrib_scores[spec][-1]:
 
-                            not_stud.append(temp_arr_en[-1])
-                            preferences_stud.loc[temp_arr_en[-1]]["Entrants"][1] += 1
+                    not_stud.popleft()
 
-                            temp_arr_en.pop(-1)
-                            temp_arr_sc.pop(-1)
+                    not_stud.appendleft(distrib_stud[spec][-1])
+                    preferences_stud.loc[distrib_stud[spec][-1]]["Entrants"][1] += 1
 
-                            temp_arr_en.append(entr)
-                            temp_arr_sc.append(temp_score_entr_spec)
+                    distrib_stud[spec].pop(-1)
+                    distrib_scores[spec].pop(-1)
+
+                    distrib_stud[spec].append(entr)
+                    distrib_scores[spec].append(temp_score_entr_spec)
                             
-                            temp_arr_sc, temp_arr_en = my_sort(temp_arr_sc, temp_arr_en, True, 0)
-
-                            not_stud.remove(entr)
+                    distrib_scores[spec], distrib_stud[spec] = my_sort(distrib_scores[spec], distrib_stud[spec], True, 0)
                             
-                            passing_score[spec] = temp_arr_sc[-1]
+                    passing_score[spec] = distrib_scores[spec][-1]
 
-                            distrib_stud[spec] = temp_arr_en
-                            distrib_scores[spec] = temp_arr_sc
-
-                            break
+                    break
                         
-                        # если квота превышена, но у абитуриента entr сумма баллов больше такая же как и у крайнего абитуриента в отсортированном листе ожидания,
-                        # сравниваем их баллы за отдельные экзамены
-                        elif temp_score_entr_spec == temp_arr_sc[-1]:
+                # если квота превышена, но у абитуриента entr сумма баллов больше такая же как и у крайнего абитуриента в отсортированном листе ожидания,
+                # сравниваем их баллы за отдельные экзамены
+                elif temp_score_entr_spec == distrib_scores[spec][-1]:
 
-                            trash, rating_subj = my_sort(preferences_spec[speciality_col[spec]], preferences_spec["Subjects"], False, 1)
+                    trash, rating_subj = my_sort(preferences_spec[speciality_col[spec]], preferences_spec["Subjects"], False, 1)
 
-                            for subj in rating_subj:
-                                if scores.loc[entr][subj] > scores.loc[temp_arr_en[-1]][subj]:
+                    for subj in rating_subj:
+                        if scores.loc[entr][subj] > scores.loc[distrib_stud[spec][-1]][subj]:
+                            
+                            not_stud.popleft()
 
-                                    not_stud.append(temp_arr_en[-1])
-                                    preferences_stud.loc[temp_arr_en[-1]]["Entrants"][1] += 1
+                            not_stud.appendleft(distrib_stud[spec][-1])
+                            preferences_stud.loc[distrib_stud[spec][-1]]["Entrants"][1] += 1
 
-                                    temp_arr_en.pop(-1)
-                                    temp_arr_sc.pop(-1)
+                            distrib_stud[spec].pop(-1)
+                            distrib_scores[spec].pop(-1)
 
-                                    temp_arr_en.append(entr)
-                                    temp_arr_sc.append(temp_score_entr_spec)
+                            distrib_stud[spec].append(entr)
+                            distrib_scores[spec].append(temp_score_entr_spec)
                                     
-                                    temp_arr_sc, temp_arr_en = my_sort(temp_arr_sc, temp_arr_en, True, 0)
-
-                                    not_stud.remove(entr)
+                            distrib_scores[spec], distrib_stud[spec] = my_sort(distrib_scores[spec], distrib_stud[spec], True, 0)
                                     
-                                    passing_score[spec] = temp_arr_sc[-1]
-
-                                    distrib_stud[spec] = temp_arr_en
-                                    distrib_scores[spec] = temp_arr_sc
-
-                                    break
-
-                                elif scores.loc[entr][subj] < scores.loc[temp_arr_en[-1]][subj]:
-                                    
-                                    # если балл абитуриента entr меньше, чем у крайнего абитуриента в отсортированном листе ожидания
-                                    # за отдельно взятый экзамен, то его заявление переносится на следующую по приоритету специальность
-                                    preferences_stud.loc[entr]["Entrants"][1] += 1
-
-                                    break
+                            passing_score[spec] = distrib_scores[spec][-1]
 
                             break
+                                
+                        elif scores.loc[entr][subj] < scores.loc[distrib_stud[spec][-1]][subj]:
 
-                        else:
-
+                            # если балл абитуриента entr меньше, чем у крайнего абитуриента в отсортированном листе ожидания
+                            # за отдельно взятый экзамен, то его заявление переносится на следующую по приоритету специальность
                             preferences_stud.loc[entr]["Entrants"][1] += 1
 
-        print(preferences_stud)
-        print("\n")
-        print(distrib_stud)
-        print("\n")
+                            break
+
+                    break
+
+                else:
+
+                    preferences_stud.loc[entr]["Entrants"][1] += 1
+
+    # print(preferences_stud)
+    # print("\n")
+    # print(distrib_stud)
+    # print("\n")
 
     return distrib_stud, passing_score, rejected_entrants
 
